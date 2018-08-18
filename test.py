@@ -23,13 +23,6 @@ IMAGE_SIZE=32
 NUM_CHANNELS=3
 NUM_LABELS=2
 
-CONV1_SIZE=5
-CONV1_DEEP=8
-
-CONV2_SIZE=5
-CONV2_DEEP=16
-
-FC_SIZE=512
 
 train_data = np.zeros((numtrain,32,32,3))
 train_label = np.zeros((numtrain,2))
@@ -39,8 +32,8 @@ test_label = np.zeros((numtest,2))
 # 将图像数据存储到data[i]
 
 for i in range(numtrain):
-    path = {"path1":"/Users/dengyuzhao/Downloads/齐朝晖论文/pic_data/"+str(i+1)+".jpg", 
-            "path2":"/Users/dengyuzhao/Downloads/齐朝晖论文/label.txt"}            
+    path = {"path1":"/Users/dengyuzhao/Downloads/mytry_face-detect/pic_data/"+str(i+1)+".jpg",
+            "path2":"/Users/dengyuzhao/Downloads/mytry_face-detect/label.txt"}
     f1 = cv2.imread(path["path1"])
     train_data[i] = f1
 
@@ -57,8 +50,8 @@ f2.close()
 
 
 for i in range(numtest):
-    path = {"path1":"/Users/dengyuzhao/Downloads/齐朝晖论文/pic_data/"+str(i+201)+".jpg", 
-            "path2":"/Users/dengyuzhao/Downloads/齐朝晖论文/label.txt"}            
+    path = {"path1":"/Users/dengyuzhao/Downloads/mytry_face-detect/pic_data/"+str(i+201)+".jpg",
+            "path2":"/Users/dengyuzhao/Downloads/mytry_face-detect/label.txt"}            
     f1 = cv2.imread(path["path1"])
     test_data[i] = f1
 
@@ -81,54 +74,30 @@ f2.close()
 
 def inference(input_tensor,train,regularizer):
     
-    with tf.variable_scope('layer1-conv1'):
-        conv1_weights=tf.get_variable("weight",[CONV1_SIZE,CONV1_SIZE,NUM_CHANNELS,CONV1_DEEP],
-                                          initializer=tf.truncated_normal_initializer(stddev=0.1))
-        conv1_biases=tf.get_variable("bias",[CONV1_DEEP],initializer=tf.constant_initializer(0.0))
-        
-        conv1=tf.nn.conv2d(input_tensor,conv1_weights,strides=[1,1,1,1],padding='SAME')
-        relu1=tf.nn.tanh(tf.nn.bias_add(conv1,conv1_biases))
-        
-    with tf.name_scope('layer2-pool1'):
-        pool1=tf.nn.max_pool(relu1,ksize=[1,2,2,1],strides=[1,2,2,1],padding='SAME')
-        
-    with tf.variable_scope('layer3-conv2'):
-        conv2_weights=tf.get_variable("weight",[CONV2_SIZE,CONV2_SIZE,CONV1_DEEP,CONV2_DEEP],
-                                      initializer=tf.truncated_normal_initializer(stddev=0.1))
-        conv2_biases=tf.get_variable("bias",[CONV2_DEEP],initializer=tf.constant_initializer(0.0))
-        conv2=tf.nn.conv2d(pool1,conv2_weights,strides=[1,1,1,1],padding='SAME')
-        relu2=tf.nn.tanh(tf.nn.bias_add(conv2,conv2_biases))
-        
-    with tf.name_scope('layer4-pool2'):
-        pool2=tf.nn.max_pool(relu2,ksize=[1,2,2,1],strides=[1,2,2,1],padding='SAME')
-        
+    conv1 = tf.layers.conv2d(inputs = input_tensor, filters = 5, kernel_size = 5,
+                             kernel_initializer=tf.truncated_normal_initializer(stddev=0.1),
+                            padding = "same", activation = tf.nn.tanh)
+    pool1  = tf.layers.max_pooling2d(inputs=conv1, pool_size = [2,3], strides = [2,3])
+    
+    conv2 = tf.layers.conv2d(inputs = pool1, filters = 15, kernel_size = 5,
+                             kernel_initializer=tf.truncated_normal_initializer(stddev=0.1),
+                             padding = "same", activation = tf.nn.tanh)
+    pool2  = tf.layers.max_pooling2d(inputs=conv2, pool_size = [2,3], strides = [2,3])
+    
     pool_shape=pool2.get_shape().as_list()
     nodes=pool_shape[1]*pool_shape[2]*pool_shape[3]
-    new=tf.reshape(pool2,[pool_shape[0],nodes])
+    pool2flat=tf.reshape(pool2,[pool_shape[0],nodes])
+ 
+    layer5 = tf.layers.dense(inputs= pool2flat, units = 1024, activation=tf.nn.tanh)
+        
+
+    if train:
+        layer5 = tf.layers.dropout(inputs = layer5, rate = 0.5)
     
-    
-    with tf.variable_scope('layer5-fc1'):
-        fc1_weights=tf.get_variable('weight',shape=[nodes,FC_SIZE],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.1))
-        if regularizer!=None:
-            tf.add_to_collection('losses',regularizer(fc1_weights))
-        fc1_biases=tf.get_variable('bias',shape=FC_SIZE,
-                                   initializer=tf.constant_initializer(0.1))
-        
-        fc1=tf.nn.tanh(tf.matmul(new,fc1_weights)+fc1_biases)
-        ##---如果是训练集，则要dropout使模型更鲁棒-------
-        if train:
-            fc1=tf.nn.dropout(fc1,0.5)
-            
-            
-    with tf.variable_scope('layer6-fc2'):
-        fc2_weights=tf.get_variable('weight',shape=[FC_SIZE,NUM_LABELS],
-                                    initializer=tf.truncated_normal_initializer(stddev=0.1))
-        fc2_biases=tf.get_variable('biases',shape=[NUM_LABELS],
-                                   initializer=tf.constant_initializer(0.1))
-        if regularizer!=None:
-            tf.add_to_collection('losses',regularizer(fc2_weights))
-        logit=tf.matmul(fc1,fc2_weights)+fc2_biases
-        
-    return logit
-        
+    fc2_weights=tf.get_variable("weight",[1024,2],initializer=tf.truncated_normal_initializer(stddev=0.1))
+    bias=tf.get_variable("biases",shape=[2],initializer=tf.constant_initializer(0.1))
+    logits = tf.matmul(layer5,fc2_weights)+bias
+    if regularizer!=None:
+                tf.add_to_collection('losses',regularizer(fc2_weights))
+    output = tf.nn.softmax(logits)
+    return output

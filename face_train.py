@@ -14,6 +14,9 @@ import test
 #mnist=input_data.read_data_sets("/Users/dengyuzhao/Downloads/MNIST_data/",one_hot=True)
 
 #设置参数
+numtrain = 200
+numtest = 50
+
 BATCH_SIZE=50 #一个训练BATCH中的训练样本数
 LEARNING_RATE_BASE=0.1#学习率先设置很大，然后逐渐减小
 LEARNING_RATE_DECAY=0.99#学习率的衰减率
@@ -58,16 +61,28 @@ def train():
         tf.global_variables_initializer().run()
 ####--------------------------设置BATCH_SIZE------------------------####
         for i in range(TRAINING_STEPS):
-            start=(i*BATCH_SIZE)%(test.train_data.shape[0])
-            end=min(start+BATCH_SIZE,test.train_data.shape[0])
-            xs=test.train_data[start:end]
-            ys=test.train_label[start:end]
+            ID = np.random.randint(0,199,BATCH_SIZE)
+            xs=test.train_data[ID]
+            ys=test.train_label[ID]
             _,loss_value,step=sess.run([train_op, loss, global_step],feed_dict={x:xs,y_:ys})
             
             if i % 50 ==0:
                 print("After %d steps training steps,loss on training batch is %g"%(step,loss_value))
 #                saver.save(sess,os.path.join(MODEL_SAVE_PATH,MODEL_NAME),global_step=global_step)
+ 
     
+    ypre = sess.run(y, feed_dict={x: test_data})
+    
+    y1 = np.argmax(ypre)
+    y2 = np.argmax(test_label)
+
+    accuracy = np.sum(y1-y2)
+    accuracy = accuracy/numtest
+    
+    print('Accuracy_learn ============>>  ', accuracy)
+    
+    
+
 def main(argv=None):
     train()
 
